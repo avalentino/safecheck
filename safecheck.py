@@ -346,7 +346,7 @@ manifest_schema = """\
 
 def check_file_against_schema(file, schema):
     cmd = "xmllint --schema '" + schema + "' --noout '" + file + "'"
-    cf = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+    cf = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, encoding='utf-8')
     result, resultErr = cf.communicate()
     if cf.returncode != 0:
         report_error("could not verify '" + file + "' against schema '" + schema + "'")
@@ -390,14 +390,14 @@ def crc16(filename, crc=0xFFFF):
             if i & 128:
                 tmp = tmp ^ 0x9188
             crc16.table[i] = tmp
-    f = file(filename, 'rb')
+    f = open(filename, 'rb')
     try:
         while True:
             d = f.read(65536)
             if not d:
                 break
             for byte in d:
-                crc = ((crc << 8) & 0xFF00) ^ crc16.table[((crc >> 8) ^ ord(byte)) & 0x00FF]
+                crc = ((crc << 8) & 0xFF00) ^ crc16.table[((crc >> 8) ^ byte) & 0x00FF]
     finally:
         f.close()
     return crc
@@ -405,7 +405,7 @@ crc16.table = None
 
 
 def md5sum(filename):
-    f = file(filename, 'rb')
+    f = open(filename, 'rb')
     m = hashlib.md5()
     try:
         while True:
@@ -428,7 +428,7 @@ def check_product_crc(product, manifestfile):
 
 
 def check_manifest_file(file):
-    schema = tempfile.NamedTemporaryFile(suffix='.xsd', prefix='manifest-schema-')
+    schema = tempfile.NamedTemporaryFile(suffix='.xsd', prefix='manifest-schema-', mode='w')
     try:
         schema.write(manifest_schema)
         schema.file.flush()
@@ -533,7 +533,7 @@ def verify_safe_product(product):
             files.remove(filepath)
 
     keys = list(data_objects.keys())
-    keys.sort(cmp=lambda x, y: cmp(data_objects[x]['href'], data_objects[y]['href']))
+    keys.sort(key=lambda x: data_objects[x]['href'])
     for key in keys:
         data_object = data_objects[key]
         filepath = os.path.normpath(os.path.join(product, data_object['href']))
