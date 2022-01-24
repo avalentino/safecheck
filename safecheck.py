@@ -12,7 +12,7 @@ import sys
 import tempfile
 try:
     from xml.etree.cElementTree import parse
-except ImportError, e:
+except ImportError as e:
     from xml.etree.ElementTree import parse
 
 helptext = """\
@@ -52,7 +52,7 @@ def report_message(message, status="info", **kwargs):
         if current_product is not None:
             info.append("filename:\"%s\"" % (current_product,))
         for line in message.split('\n'):
-            print "[%s] %s" % (' '.join(info), line)
+            print("[%s] %s" % (' '.join(info), line))
         sys.stdout.flush()
 
 
@@ -60,9 +60,9 @@ def report_error(message, **kwargs):
     if verbose:
         report_message(message, status="error", **kwargs)
     elif 'tags' in kwargs:
-        print "ERROR: [%s] %s" % (kwargs['tags'], message)
+        print("ERROR: [%s] %s" % (kwargs['tags'], message))
     else:
-        print "ERROR: %s" % (message,)
+        print("ERROR: %s" % (message,))
     sys.stdout.flush()
 
 
@@ -70,9 +70,9 @@ def report_warning(message, **kwargs):
     if verbose:
         report_message(message, status="warning", **kwargs)
     elif 'tags' in kwargs:
-        print "WARNING: [%s] %s" % (kwargs['tags'], message)
+        print("WARNING: [%s] %s" % (kwargs['tags'], message))
     else:
-        print "WARNING: %s" % (message,)
+        print("WARNING: %s" % (message,))
     sys.stdout.flush()
 
 
@@ -532,7 +532,7 @@ def verify_safe_product(product):
         if filepath in files:
             files.remove(filepath)
 
-    keys = data_objects.keys()
+    keys = list(data_objects.keys())
     keys.sort(cmp=lambda x, y: cmp(data_objects[x]['href'], data_objects[y]['href']))
     for key in keys:
         data_object = data_objects[key]
@@ -587,14 +587,14 @@ def verify_safe_product(product):
 def main():
     args = sys.argv[1:]
     if len(args) == 0:
-        print helptext
+        print(helptext)
         report_error("invalid arguments")
         sys.exit(1)
     if args[0] == "-h" or args[0] == "--help":
-        print helptext
+        print(helptext)
         sys.exit()
     if args[0] == "-v" or args[0] == "--version":
-        print versiontext
+        print(versiontext)
         sys.exit()
     if len(args) > 1 and args[0] == "-V":
         global verbose
@@ -602,18 +602,18 @@ def main():
         args = args[1:]
     for arg in args:
         if arg[0] == "-":
-            print helptext
+            print(helptext)
             report_error("invalid arguments")
             sys.exit(1)
 
     return_code = 0
     for arg in args:
-        print arg
+        print(arg)
         result = verify_safe_product(arg)
         if result != 0:
             if result < return_code or return_code == 0:
                 return_code = result
-        print
+        print()
     sys.exit(return_code)
 
 
