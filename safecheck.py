@@ -10,7 +10,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from xml.etree.ElementTree import parse
+from xml.etree import ElementTree as etree
 
 helptext = """\
 Usage:
@@ -45,11 +45,11 @@ def report_message(message, status="info", **kwargs):
     if verbose:
         info = [status]
         for kw in kwargs:
-            info.append("%s:\"%s\"" % (kw, kwargs[kw]))
+            info.append(f"{kw}:\"{kwargs[kw]}\"")
         if current_product is not None:
-            info.append("filename:\"%s\"" % (current_product,))
+            info.append(f"filename:\"{current_product}\"")
         for line in message.split('\n'):
-            print("[%s] %s" % (' '.join(info), line))
+            print("[{}] {}".format(' '.join(info), line))
         sys.stdout.flush()
 
 
@@ -57,9 +57,9 @@ def report_error(message, **kwargs):
     if verbose:
         report_message(message, status="error", **kwargs)
     elif 'tags' in kwargs:
-        print("ERROR: [%s] %s" % (kwargs['tags'], message))
+        print("ERROR: [{}] {}".format(kwargs['tags'], message))
     else:
-        print("ERROR: %s" % (message,))
+        print(f"ERROR: {message}")
     sys.stdout.flush()
 
 
@@ -67,9 +67,9 @@ def report_warning(message, **kwargs):
     if verbose:
         report_message(message, status="warning", **kwargs)
     elif 'tags' in kwargs:
-        print("WARNING: [%s] %s" % (kwargs['tags'], message))
+        print("WARNING: [{}] {}".format(kwargs['tags'], message))
     else:
-        print("WARNING: %s" % (message,))
+        print(f"WARNING: {message}")
     sys.stdout.flush()
 
 
@@ -416,10 +416,10 @@ def md5sum(filename):
 
 
 def check_product_crc(product, manifestfile):
-    expected_crc = "%04X" % (crc16(manifestfile),)
+    expected_crc = f"{crc16(manifestfile):04X}"
     actual_crc = os.path.splitext(os.path.basename(product))[0][-4:]
     if expected_crc != actual_crc:
-        report_warning("crc in product name '%s' does not match crc of manifest file '%s'" % (actual_crc, expected_crc))
+        report_warning(f"crc in product name '{actual_crc}' does not match crc of manifest file '{expected_crc}'")
         return False
     return True
 
@@ -463,7 +463,7 @@ def verify_safe_product(product):
 
     if not check_manifest_file(manifestfile):
         has_errors = True
-    manifest = parse(manifestfile)
+    manifest = etree.parse(manifestfile)
     if manifest is None:
         report_error("could not parse xml file '%s'" % manifestfile)
         return 2
