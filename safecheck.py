@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from xml.etree import ElementTree as etree
+import logging
 
 helptext = """\
 Usage:
@@ -37,40 +38,8 @@ NSXFDU = "{urn:ccsds:schema:xfdu:1}"
 
 verbose = False
 current_product = None
-
-
-# status=[debug, info, warning, error, alert]
-# kwargs=[tags, filename]
-def report_message(message, status="info", **kwargs):
-    if verbose:
-        info = [status]
-        for kw in kwargs:
-            info.append(f"{kw}:\"{kwargs[kw]}\"")
-        if current_product is not None:
-            info.append(f"filename:\"{current_product}\"")
-        for line in message.split('\n'):
-            print("[{}] {}".format(' '.join(info), line))
-        sys.stdout.flush()
-
-
-def report_error(message, **kwargs):
-    if verbose:
-        report_message(message, status="error", **kwargs)
-    elif 'tags' in kwargs:
-        print("ERROR: [{}] {}".format(kwargs['tags'], message))
-    else:
-        print(f"ERROR: {message}")
-    sys.stdout.flush()
-
-
-def report_warning(message, **kwargs):
-    if verbose:
-        report_message(message, status="warning", **kwargs)
-    elif 'tags' in kwargs:
-        print("WARNING: [{}] {}".format(kwargs['tags'], message))
-    else:
-        print(f"WARNING: {message}")
-    sys.stdout.flush()
+_log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
 manifest_schema = """\
@@ -346,12 +315,12 @@ def check_file_against_schema(file, schema):
     cf = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, encoding='utf-8')
     result, resultErr = cf.communicate()
     if cf.returncode != 0:
-        report_error("could not verify '" + file + "' against schema '" + schema + "'")
+        _log.error(f"could not verify '{file}' against schema '{schema}'")
         for line in resultErr.strip().splitlines():
-            report_error(line, tags="xmllint")
+            _log.error(f"[xmllint] {line}")
         return False
 
-    report_message("file '" + file + "' valid according to schema '" + schema + "'")
+    _log.info(f"file '{file}' valid according to schema '{schema}'")
     return True
 
 
@@ -419,7 +388,10 @@ def check_product_crc(product, manifestfile):
     expected_crc = f"{crc16(manifestfile):04X}"
     actual_crc = os.path.splitext(os.path.basename(product))[0][-4:]
     if expected_crc != actual_crc:
-        report_warning(f"crc in product name '{actual_crc}' does not match crc of manifest file '{expected_crc}'")
+        _log.warning(
+            f"crc in product name '{actual_crc}' does not match crc "
+            f"of manifest file '{expected_crc}'"
+        )
         return False
     return True
 
@@ -447,14 +419,14 @@ def verify_safe_product(product):
     current_product = os.path.basename(product)
 
     if not os.path.exists(product):
-        report_error("could not find '%s'" % product)
+        _log.error(f"could not find '{product}'")
         return 2
 
     product = os.path.normpath(product)
 
     manifestfile = os.path.join(product, "manifest.safe")
     if not os.path.exists(manifestfile):
-        report_error("could not find '%s'" % manifestfile)
+        _log.error(f"could not find '{manifestfile}'")
         return 2
 
     if os.path.basename(product)[4:7] != "AUX":
@@ -465,7 +437,7 @@ def verify_safe_product(product):
         has_errors = True
     manifest = etree.parse(manifestfile)
     if manifest is None:
-        report_error("could not parse xml file '%s'" % manifestfile)
+        _log.error(f"could not parse xml file '{manifestfile}'")
         return 2
 
     # find list of files in product
@@ -473,7 +445,8 @@ def verify_safe_product(product):
     for dirpath, dirnames, filenames in os.walk(product):
         files.extend([os.path.join(dirpath, filename) for filename in filenames])
     if manifestfile not in files:
-        report_error("could not find 'manifest.safe' in directory listing of product")
+        _log.error(
+            "could not find 'manifest.safe' in directory listing of product")
         return 2
     files.remove(manifestfile)
 
@@ -499,8 +472,10 @@ def verify_safe_product(product):
         # rep_id can be a space separated list of IDs (first one contains the main schema)
         rep_id = rep_id.split()[0]
         if rep_id not in reps:
-            report_error("dataObject '" + data_object_id + "' in informationPackageMap contains repID '" + rep_id +
-                         "' which is not defined in metadataSection")
+            _log.error(
+                f"dataObject '{data_object_id}' in informationPackageMap "
+                f"contains repID '{rep_id}' which is not defined in "
+                f"metadataSection")
             return 2
         data_objects[data_object_id] = {'rep': reps[rep_id]}
 
@@ -508,16 +483,18 @@ def verify_safe_product(product):
     for data_object in data_object_section.findall('dataObject'):
         data_object_id = data_object.get('ID')
         if data_object_id not in data_objects:
-            report_error("dataObject '" + data_object_id +
-                         "' in dataObjectSection is not defined in informationPackageMap")
+            _log.error(
+                f"dataObject '{data_object_id}' in dataObjectSection is "
+                f"not defined in informationPackageMap")
             return 2
         rep_id = data_object.get('repID')
         # rep_id can be a space separated list of IDs (first one contains the main schema)
         rep_id = rep_id.split()[0]
         if data_objects[data_object_id]['rep']['ID'] != rep_id:
-            report_error("dataObject '" + data_object_id + "' contains repID '" +
-                         data_objects[data_object_id]['rep']['ID'] + "' in informationPackageMap, but '" + rep_id +
-                         "' in dataObjectSection")
+            _log.error(
+                f"dataObject '{data_object_id}' contains repID "
+                f"'{data_objects[data_object_id]['rep']['ID']}' in "
+                f"informationPackageMap, but '{rep_id}' in dataObjectSection")
             has_errors = True
         size = data_object.find('byteStream').get('size')
         href = data_object.find('byteStream/fileLocation').get('href')
@@ -536,32 +513,36 @@ def verify_safe_product(product):
         filepath = os.path.normpath(os.path.join(product, data_object['href']))
         # check existence of file
         if not os.path.exists(filepath):
-            report_error("manifest.safe reference '" + filepath + "' does not exist")
+            _log.error(f"manifest.safe reference '{filepath}' does not exist")
             has_errors = True
             continue
         # check file size
         filesize = os.path.getsize(filepath)
         if filesize != int(data_object['size']):
-            report_error("file size for '" + filepath + "' (" + str(filesize) +
-                         ") does not match file size in manifest.safe (" + data_object['size'] + ")")
+            _log.error(
+                f"file size for '{filepath}' ({filesize}) does not match "
+                f"file size in manifest.safe ({data_object['size']})")
             has_errors = True
         # check md5sum
         checksum = md5sum(filepath)
         if checksum != data_object['checksum']:
-            report_error("checksum for '" + filepath + "' (" + checksum +
-                         ") does not match checksum in manifest.safe (" + data_object['checksum'] + ")")
+            _log.error(
+                f"checksum for '{filepath}' ({checksum}) does not match "
+                f"checksum in manifest.safe ({data_object['checksum']})")
             has_errors = True
         # check with XML Schema (if the file is an xml file)
         if is_xml(filepath) and data_object['rep']:
             schema = os.path.normpath(os.path.join(product, data_object['rep']['href']))
             if not os.path.exists(schema):
-                report_error("schema file '" + schema + "' does not exist")
+                _log.error(f"schema file '{schema}' does not exist")
                 has_errors = True
                 # TODO: remove this temporary workaround
                 # try to see if the schema file exists in a 'support' subdirectory
                 schema = os.path.normpath(os.path.join(product, "support", data_object['rep']['href']))
                 if os.path.exists(schema):
-                    report_warning("found schema in 'support' subdirectory - will use that for verification")
+                    _log.warning(
+                        "found schema in 'support' subdirectory - "
+                        "will use that for verification")
                     if not check_file_against_schema(filepath, schema):
                         has_errors = True
             elif not check_file_against_schema(filepath, schema):
@@ -569,7 +550,9 @@ def verify_safe_product(product):
 
     # Report on files in the SAFE package that are not referenced by the manifset.safe file
     for file in files:
-        report_warning("file '" + file + "' found in product but not included in manifest.safe")
+        _log.warning(
+            f"file '{file}' found in product but not included "
+            f"in manifest.safe")
         has_warnings = True
 
     current_product = None
@@ -585,7 +568,7 @@ def main():
     args = sys.argv[1:]
     if len(args) == 0:
         print(helptext)
-        report_error("invalid arguments")
+        _log.error("invalid arguments")
         sys.exit(1)
     if args[0] == "-h" or args[0] == "--help":
         print(helptext)
@@ -600,7 +583,7 @@ def main():
     for arg in args:
         if arg[0] == "-":
             print(helptext)
-            report_error("invalid arguments")
+            _log.error("invalid arguments")
             sys.exit(1)
 
     return_code = 0
@@ -619,5 +602,7 @@ try:
 except SystemExit:
     raise
 except:
-    report_error(str(sys.exc_info()[1]).replace('\n', ' ').replace('\r', ''), tags="exception")
+    _log.error(
+        "[exception] {}".format(
+            str(sys.exc_info()[1]).replace('\n', ' ').replace('\r', '')))
     sys.exit(1)
