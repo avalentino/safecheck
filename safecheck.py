@@ -303,20 +303,6 @@ manifest_schema = """\
 """
 
 
-def check_file_against_schema(file, schema):
-    cmd = "xmllint --schema '" + schema + "' --noout '" + file + "'"
-    cf = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, encoding='utf-8')
-    result, resultErr = cf.communicate()
-    if cf.returncode != 0:
-        _log.error(f"could not verify '{file}' against schema '{schema}'")
-        for line in resultErr.strip().splitlines():
-            _log.error(f"[xmllint] {line}")
-        return False
-
-    _log.info(f"file '{file}' valid according to schema '{schema}'")
-    return True
-
-
 def is_xml(file):
     part1, ext = os.path.splitext(file)
     base_name = os.path.basename(file)
@@ -375,6 +361,20 @@ def md5sum(filename):
     finally:
         f.close()
     return m.hexdigest()
+
+
+def check_file_against_schema(file, schema):
+    cmd = "xmllint --schema '" + schema + "' --noout '" + file + "'"
+    cf = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, encoding='utf-8')
+    result, resultErr = cf.communicate()
+    if cf.returncode != 0:
+        _log.error(f"could not verify '{file}' against schema '{schema}'")
+        for line in resultErr.strip().splitlines():
+            _log.error(f"[xmllint] {line}")
+        return False
+
+    _log.info(f"file '{file}' valid according to schema '{schema}'")
+    return True
 
 
 def check_product_crc(product, manifestfile):
