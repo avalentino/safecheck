@@ -26,7 +26,8 @@ import subprocess
 import sys
 import tempfile
 from typing import IO, Iterator
-from xml.etree import ElementTree as etree
+# from xml.etree import ElementTree as etree
+from lxml import etree
 
 
 __version__ = '3.0'
@@ -378,17 +379,24 @@ def get_md5sum(filename: os.PathLike) -> str:
     return md5.hexdigest()
 
 
-def check_file_against_schema(file, schema):
-    cmd = "xmllint --schema '" + schema + "' --noout '" + file + "'"
-    cf = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, encoding='utf-8')
-    result, resultErr = cf.communicate()
-    if cf.returncode != 0:
-        _log.error(f"could not verify '{file}' against schema '{schema}'")
-        for line in resultErr.strip().splitlines():
-            _log.error(f"[xmllint] {line}")
-        return False
+def check_file_against_schema(xmlfile: os.PathLike,
+                              schemafile: os.PathLike) -> bool:
+    """Validate the input XML file aganst the provided schema."""
+    xmldoc = etree.parse(os.fspath(xmlfile))
 
-    _log.info(f"file '{file}' valid according to schema '{schema}'")
+    schemadoc = etree.parse(os.fspath(schemafile))
+    schema = etree.XMLSchema(schemadoc.getroot())
+
+    try:
+        schema.assertValid(xmldoc)
+    except etree.DocumentInvalid as exc:
+        _log.error(
+            f"could not verify '{xmlfile}' against schema '{schemafile}'")
+        for error in  exc.error_log:
+            _log.error(f"{error.filename}:{error.line}: {error.message}")
+        _log.error(f"{xmlfile} fails to validate")
+
+    _log.info(f"file '{xmlfile}' valid according to schema '{schemafile}'")
     return True
 
 
