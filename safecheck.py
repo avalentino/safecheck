@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
-
+# PYTHON_ARGCOMPLETE_OK
 # Copyright (C) 2011-2012 S[&]T, The Netherlands.
 
-VERSION = "2.1"
+"""Perform constency checks on SAFE products.
 
+Check the contents of the SAFE products against information included in
+the manifest file, and also perform checks on the components size and
+checksums.
+
+All XML files included in the product are checked against their schema
+(if available).
+
+Additional checks on consistency between the product name and information
+included in the mnifest file are also performed.
+"""
+
+import argparse
 import hashlib
 import numpy
 import os
@@ -13,33 +25,14 @@ import tempfile
 from xml.etree import ElementTree as etree
 import logging
 
-helptext = """\
-Usage:
-    safecheck [-V] <SAFE folder> [<SAFE folder> ...]
-        Perform an internal constency check on the given SAFE product.
-        Note that the product must be unzipped.
 
-        Use -V option to produce system compatible log messages
-
-    safecheck -h, --help
-        Show help (this text)
-
-    safecheck -v, --version
-        Print the version number of safecheck and exit
-
-"""
-
-versiontext = "SAFE Internal Consistency Checker (safecheck) v" + VERSION + "\n" + \
-    "Copyright (C) 2011-2012 S[&]T, The Netherlands.\n"
-
+__version__ = '3.0'
 
 NSXFDU = "{urn:ccsds:schema:xfdu:1}"
 
 
-verbose = False
 current_product = None
 _log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
 manifest_schema = """\
@@ -564,45 +557,123 @@ def verify_safe_product(product):
     return 0
 
 
-def main():
-    args = sys.argv[1:]
-    if len(args) == 0:
-        print(helptext)
-        _log.error("invalid arguments")
-        sys.exit(1)
-    if args[0] == "-h" or args[0] == "--help":
-        print(helptext)
-        sys.exit()
-    if args[0] == "-v" or args[0] == "--version":
-        print(versiontext)
-        sys.exit()
-    if len(args) > 1 and args[0] == "-V":
-        global verbose
-        verbose = True
-        args = args[1:]
-    for arg in args:
-        if arg[0] == "-":
-            print(helptext)
-            _log.error("invalid arguments")
-            sys.exit(1)
+# --- CLI ---------------------------------------------------------------------
+PROG = 'safechecl'
+LOGFMT = '%(levelname)s: %(message)s'
 
-    return_code = 0
-    for arg in args:
-        print(arg)
-        result = verify_safe_product(arg)
-        if result != 0:
-            if result < return_code or return_code == 0:
-                return_code = result
-        print()
-    sys.exit(return_code)
+EX_OK = getattr(os, "EX_OK", 0)
+EX_FAILURE = 1
+EX_INTERRUPT = 130
 
 
-try:
-    main()
-except SystemExit:
-    raise
-except:
-    _log.error(
-        "[exception] {}".format(
-            str(sys.exc_info()[1]).replace('\n', ' ').replace('\r', '')))
-    sys.exit(1)
+def _autocomplete(parser):
+    try:
+        import argcomplete
+    except ImportError:
+        pass
+    else:
+        argcomplete.autocomplete(parser)
+
+
+def _set_logging_control_args(parser, default_loglevel='WARNING'):
+    """Setup command line options for logging control."""
+    loglevels = [logging.getLevelName(level) for level in range(10, 60, 10)]
+
+    parser.add_argument(
+        '--loglevel', default=default_loglevel, choices=loglevels,
+        help='logging level (default: %(default)s)')
+    parser.add_argument(
+        '-q', '--quiet', dest='loglevel', action='store_const',
+        const='ERROR',
+        help='suppress standard output messages, '
+             'only errors are printed to screen')
+    parser.add_argument(
+        '-v', '--verbose', dest='loglevel', action='store_const',
+        const='INFO', help='print verbose output messages')
+    parser.add_argument(
+        '-d', '--debug', dest='loglevel', action='store_const',
+        const='DEBUG', help='print debug messages')
+
+    return parser
+
+
+def get_parser(subparsers=None):
+    """Instantiate the command line argument (sub-)parser."""
+    name = PROG
+    synopsis = __doc__.splitlines()[0]
+    doc = __doc__
+
+    if subparsers is None:
+        parser = argparse.ArgumentParser(prog=name, description=doc)
+        parser.add_argument(
+            '--version', action='version', version='%(prog)s v' + __version__)
+    else:
+        parser = subparsers.add_parser(name, description=doc, help=synopsis)
+
+    parser = _set_logging_control_args(parser)
+    
+    # Command line options
+    # ...
+
+    # Positional arguments
+    parser.add_argument('products', nargs="+", metavar="SAFE-PRODUCT")
+
+    if subparsers is None:
+        _autocomplete(parser)
+
+    return parser
+
+def parse_args(args=None, namespace=None, parser=None):
+    """Parse command line arguments."""
+    if parser is None:
+        parser = get_parser()
+
+    args = parser.parse_args(args, namespace)
+
+    # Common pre-processing of parsed arguments and consistency checks
+    # ...
+
+    # if getattr(args, 'func', None) is None:
+    #     parser.error('no sub-command specified.')
+
+    return args
+
+
+def main(*argv):
+    """Main CLI interface."""
+    # setup logging
+    logging.basicConfig(format=LOGFMT, stream=sys.stdout)
+    logging.captureWarnings(True)
+    log = logging.getLogger()
+
+    # parse cmd line arguments
+    args = parse_args(argv if argv else None)
+
+    # execute main tasks
+    exit_code = EX_OK
+    try:
+        log.setLevel(args.loglevel)
+
+        for product in args.products:
+            print(product)
+            result = verify_safe_product(product)
+            if result != 0:
+                if result < exit_code or exit_code == EX_OK:
+                    exit_code = result
+            print()
+
+    except Exception as exc:
+        log.critical(
+            'unexpected exception caught: {!r} {}'.format(
+                type(exc).__name__, exc))
+        log.debug('stacktrace:', exc_info=True)
+        exit_code = EX_FAILURE
+    except KeyboardInterrupt:
+        log.warning('Keyboard interrupt received: exit the program')
+        exit_code = EX_INTERRUPT
+
+    return exit_code
+
+
+if __name__ == '__main__':
+    sys.exit(main())
