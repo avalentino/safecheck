@@ -10,10 +10,7 @@ import os
 import subprocess
 import sys
 import tempfile
-try:
-    from xml.etree.cElementTree import parse
-except ImportError as e:
-    from xml.etree.ElementTree import parse
+from xml.etree.ElementTree import parse
 
 helptext = """\
 Usage:
