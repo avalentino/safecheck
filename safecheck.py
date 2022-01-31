@@ -33,6 +33,13 @@ __version__ = '3.0'
 _log = logging.getLogger(__name__)
 
 
+EX_OK = getattr(os, "EX_OK", 0)
+EX_FAILURE = 1
+EX_ERROR = 2
+EX_WARNING = 3
+EX_INTERRUPT = 130
+
+
 NSXFDU = "{urn:ccsds:schema:xfdu:1}"
 
 
@@ -401,14 +408,14 @@ def verify_safe_product(product):
 
     if not os.path.exists(product):
         _log.error(f"could not find '{product}'")
-        return 2
+        return EX_ERROR
 
     product = os.path.normpath(product)
 
     manifestfile = os.path.join(product, "manifest.safe")
     if not os.path.exists(manifestfile):
         _log.error(f"could not find '{manifestfile}'")
-        return 2
+        return EX_ERROR
 
     if os.path.basename(product)[4:7] != "AUX":
         if not check_product_crc(product, manifestfile):
@@ -419,7 +426,7 @@ def verify_safe_product(product):
     manifest = etree.parse(manifestfile)
     if manifest is None:
         _log.error(f"could not parse xml file '{manifestfile}'")
-        return 2
+        return EX_ERROR
 
     # find list of files in product
     files = []
@@ -428,7 +435,7 @@ def verify_safe_product(product):
     if manifestfile not in files:
         _log.error(
             "could not find 'manifest.safe' in directory listing of product")
-        return 2
+        return EX_ERROR
     files.remove(manifestfile)
 
     # check files that are referenced in manifest file
@@ -457,7 +464,7 @@ def verify_safe_product(product):
                 f"dataObject '{data_object_id}' in informationPackageMap "
                 f"contains repID '{rep_id}' which is not defined in "
                 f"metadataSection")
-            return 2
+            return EX_ERROR
         data_objects[data_object_id] = {'rep': reps[rep_id]}
 
     data_object_section = manifest.find('dataObjectSection')
@@ -467,7 +474,7 @@ def verify_safe_product(product):
             _log.error(
                 f"dataObject '{data_object_id}' in dataObjectSection is "
                 f"not defined in informationPackageMap")
-            return 2
+            return EX_ERROR
         rep_id = data_object.get('repID')
         # rep_id can be a space separated list of IDs (first one contains the main schema)
         rep_id = rep_id.split()[0]
@@ -537,19 +544,15 @@ def verify_safe_product(product):
         has_warnings = True
 
     if has_errors:
-        return 2
+        return EX_ERROR
     if has_warnings:
-        return 3
-    return 0
+        return EX_WARNING
+    return EX_OK
 
 
 # --- CLI ---------------------------------------------------------------------
 PROG = 'safechecl'
 LOGFMT = '%(levelname)s: %(message)s'
-
-EX_OK = getattr(os, "EX_OK", 0)
-EX_FAILURE = 1
-EX_INTERRUPT = 130
 
 
 def _autocomplete(parser):
