@@ -15,16 +15,17 @@ Additional checks on consistency between the product name and information
 included in the mnifest file are also performed.
 """
 
+import io
+import os
+import sys
+import hashlib
+import logging
+import pathlib
 import argparse
 import binascii
 import functools
-import hashlib
-import io
-import logging
-import os
-import pathlib
-import sys
 from typing import IO, Iterator, Optional, Union
+
 from lxml import etree
 
 
