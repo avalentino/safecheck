@@ -398,40 +398,34 @@ def check_product_crc(product: os.PathLike, manifestfile: os.PathLike) -> bool:
     return True
 
 
-def verify_safe_product(product):
+def verify_safe_product(product: os.PathLike) -> int:
     has_errors = False
     has_warnings = False
 
-    # remove trailing '/' if it exists
-    if product[-1] == '/':
-        product = product[:-1]
-
-    if not os.path.exists(product):
+    if not pathlib.Path(product).exists():
         _log.error(f"could not find '{product}'")
         return EX_ERROR
 
-    product = os.path.normpath(product)
+    product = pathlib.Path(product).resolve()
 
-    manifestfile = os.path.join(product, "manifest.safe")
-    if not os.path.exists(manifestfile):
+    manifestfile = product / "manifest.safe"
+    if not manifestfile.exists():
         _log.error(f"could not find '{manifestfile}'")
         return EX_ERROR
 
-    if os.path.basename(product)[4:7] != "AUX":
+    if product.name[4:7] != "AUX":
         if not check_product_crc(product, manifestfile):
             has_warnings = True
 
     if not check_manifest_file(manifestfile):
         has_errors = True
-    manifest = etree.parse(manifestfile)
-    if manifest is None:
+    manifest_xmldoc = etree.parse(os.fspath(manifestfile))
+    if manifest_xmldoc is None:
         _log.error(f"could not parse xml file '{manifestfile}'")
         return EX_ERROR
 
     # find list of files in product
-    files = []
-    for dirpath, dirnames, filenames in os.walk(product):
-        files.extend([os.path.join(dirpath, filename) for filename in filenames])
+    files = {item for item in product.rglob("*") if item.is_file()}
     if manifestfile not in files:
         _log.error(
             "could not find 'manifest.safe' in directory listing of product")
@@ -442,22 +436,25 @@ def verify_safe_product(product):
     data_objects = {}
     reps = {}
 
-    metadata_section = manifest.find('metadataSection')
+    metadata_section = manifest_xmldoc.find('metadataSection')
     for metadata_object in metadata_section.findall('metadataObject'):
-        ID = metadata_object.get('ID')
-        if ID[-6:] == "Schema":
-            rep_id = ID
+        elem_id = metadata_object.get('ID')
+        if elem_id.endswith("Schema"):
+            rep_id = elem_id
             href = metadata_object.find('metadataReference').get('href')
             reps[rep_id] = {'ID': rep_id, 'href': href}
-            filepath = os.path.normpath(os.path.join(product, href))
+            filepath = product /  href
             if filepath in files:
                 files.remove(filepath)
 
-    information_package_map = manifest.find('informationPackageMap')
-    for content_unit in information_package_map.findall(NSXFDU + 'contentUnit' + '/' + NSXFDU + 'contentUnit'):
-        data_object_id = content_unit.find('dataObjectPointer').get('dataObjectID')
+    information_package_map = manifest_xmldoc.find('informationPackageMap')
+    xp = f"{NSXFDU}contentUnit/{NSXFDU}contentUnit"
+    for content_unit in information_package_map.findall(xp):
+        data_object = content_unit.find('dataObjectPointer')
+        data_object_id = data_object.get('dataObjectID')
         rep_id = content_unit.get('repID')
-        # rep_id can be a space separated list of IDs (first one contains the main schema)
+        # rep_id can be a space separated list of IDs
+        # (first one contains the main schema)
         rep_id = rep_id.split()[0]
         if rep_id not in reps:
             _log.error(
@@ -467,7 +464,7 @@ def verify_safe_product(product):
             return EX_ERROR
         data_objects[data_object_id] = {'rep': reps[rep_id]}
 
-    data_object_section = manifest.find('dataObjectSection')
+    data_object_section = manifest_xmldoc.find('dataObjectSection')
     for data_object in data_object_section.findall('dataObject'):
         data_object_id = data_object.get('ID')
         if data_object_id not in data_objects:
@@ -476,7 +473,8 @@ def verify_safe_product(product):
                 f"not defined in informationPackageMap")
             return EX_ERROR
         rep_id = data_object.get('repID')
-        # rep_id can be a space separated list of IDs (first one contains the main schema)
+        # rep_id can be a space separated list of IDs
+        # (first one contains the main schema)
         rep_id = rep_id.split()[0]
         if data_objects[data_object_id]['rep']['ID'] != rep_id:
             _log.error(
@@ -490,7 +488,7 @@ def verify_safe_product(product):
         data_objects[data_object_id]['size'] = size
         data_objects[data_object_id]['href'] = href
         data_objects[data_object_id]['checksum'] = checksum
-        filepath = os.path.normpath(os.path.join(product, href))
+        filepath = product / href
         if filepath in files:
             files.remove(filepath)
 
@@ -498,14 +496,14 @@ def verify_safe_product(product):
     keys.sort(key=lambda x: data_objects[x]['href'])
     for key in keys:
         data_object = data_objects[key]
-        filepath = os.path.normpath(os.path.join(product, data_object['href']))
+        filepath = product / data_object['href']
         # check existence of file
-        if not os.path.exists(filepath):
+        if not filepath.exists():
             _log.error(f"manifest.safe reference '{filepath}' does not exist")
             has_errors = True
             continue
         # check file size
-        filesize = os.path.getsize(filepath)
+        filesize = filepath.stat().st_size
         if filesize != int(data_object['size']):
             _log.error(
                 f"file size for '{filepath}' ({filesize}) does not match "
@@ -520,14 +518,15 @@ def verify_safe_product(product):
             has_errors = True
         # check with XML Schema (if the file is an xml file)
         if is_xml(filepath) and data_object['rep']:
-            schema = os.path.normpath(os.path.join(product, data_object['rep']['href']))
-            if not os.path.exists(schema):
+            schema = product / data_object['rep']['href']
+            if not schema.exists():
                 _log.error(f"schema file '{schema}' does not exist")
                 has_errors = True
                 # TODO: remove this temporary workaround
-                # try to see if the schema file exists in a 'support' subdirectory
-                schema = os.path.normpath(os.path.join(product, "support", data_object['rep']['href']))
-                if os.path.exists(schema):
+                # try to see if the schema file exists in a 'support' 
+                # subdirectory
+                schema = product / "support" / data_object['rep']['href']
+                if schema.exists():
                     _log.warning(
                         "found schema in 'support' subdirectory - "
                         "will use that for verification")
@@ -536,10 +535,11 @@ def verify_safe_product(product):
             elif not check_file_against_schema(filepath, schema):
                 has_errors = True
 
-    # Report on files in the SAFE package that are not referenced by the manifset.safe file
-    for file in files:
+    # Report on files in the SAFE package that are not referenced by the
+    # manifset.safe file
+    for filename in sorted(files):
         _log.warning(
-            f"file '{file}' found in product but not included "
+            f"file '{filename}' found in product but not included "
             f"in manifest.safe")
         has_warnings = True
 
