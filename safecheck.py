@@ -26,8 +26,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
-from typing import IO, Iterator
-# from xml.etree import ElementTree as etree
+from typing import IO, Iterator, Optional, Union
 from lxml import etree
 
 
@@ -341,13 +340,20 @@ def get_md5sum(filename: os.PathLike) -> str:
     return md5.hexdigest()
 
 
+XmlSchemaType = Union[os.PathLike, etree.XMLSchema]
+
+
 def check_file_against_schema(xmlfile: os.PathLike,
-                              schemafile: os.PathLike) -> bool:
+                              schema: XmlSchemaType) -> bool:
     """Validate the input XML file aganst the provided schema."""
     xmldoc = etree.parse(os.fspath(xmlfile))
 
-    schemadoc = etree.parse(os.fspath(schemafile))
-    schema = etree.XMLSchema(schemadoc.getroot())
+    if not isinstance(schema, etree.XMLSchema):
+        schemafile = schema
+        schemadoc = etree.parse(os.fspath(schemafile))
+        schema = etree.XMLSchema(schemadoc.getroot())
+    else:
+        schemafile = "basic manifest schema (internal)"
 
     try:
         schema.assertValid(xmldoc)
@@ -360,6 +366,16 @@ def check_file_against_schema(xmlfile: os.PathLike,
 
     _log.info(f"file '{xmlfile}' valid according to schema '{schemafile}'")
     return True
+
+
+def check_manifest_file(filename: os.PathLike,
+                        manifestfile: Optional[os.PathLike] = None) -> bool:
+    if manifestfile is None:
+        schema_root = etree.fromstring(manifest_schema)
+    else:
+        schema_root = etree.parse(manifestfile).getroot()
+    schema = etree.XMLSchema(schema_root)
+    return check_file_against_schema(filename, schema)
 
 
 def check_product_crc(product: os.PathLike, manifestfile: os.PathLike) -> bool:
@@ -376,17 +392,6 @@ def check_product_crc(product: os.PathLike, manifestfile: os.PathLike) -> bool:
         )
         return False
     return True
-
-
-def check_manifest_file(file):
-    schema = tempfile.NamedTemporaryFile(suffix='.xsd', prefix='manifest-schema-', mode='w')
-    try:
-        schema.write(manifest_schema)
-        schema.file.flush()
-        return check_file_against_schema(file, schema.name)
-    finally:
-        schema.close()
-    return False
 
 
 def verify_safe_product(product):
