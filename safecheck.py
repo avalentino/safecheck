@@ -23,9 +23,7 @@ import io
 import logging
 import os
 import pathlib
-import subprocess
 import sys
-import tempfile
 from typing import IO, Iterator, Optional, Union
 from lxml import etree
 
