@@ -31,13 +31,9 @@ from lxml import etree
 
 
 __version__ = '3.0'
-
-NSXFDU = "{urn:ccsds:schema:xfdu:1}"
-
-
-current_product = None
 _log = logging.getLogger(__name__)
 
+NSXFDU = "{urn:ccsds:schema:xfdu:1}"
 
 manifest_schema = """\
 <?xml version="1.0"?>
@@ -402,9 +398,6 @@ def verify_safe_product(product):
     if product[-1] == '/':
         product = product[:-1]
 
-    global current_product
-    current_product = os.path.basename(product)
-
     if not os.path.exists(product):
         _log.error(f"could not find '{product}'")
         return 2
@@ -541,8 +534,6 @@ def verify_safe_product(product):
             f"file '{file}' found in product but not included "
             f"in manifest.safe")
         has_warnings = True
-
-    current_product = None
 
     if has_errors:
         return 2
