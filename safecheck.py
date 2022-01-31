@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # PYTHON_ARGCOMPLETE_OK
 # Copyright (C) 2011-2012 S[&]T, The Netherlands.
+# Copyright (C) 2022 Antonio Valentino.
 
 """Perform constency checks on SAFE products.
 
@@ -312,14 +313,12 @@ MANIFEST_SCHEMA_STR = """\
 
 
 def is_xml(filename: os.PathLike) -> bool:
+    """Return True if the filename is an XML file."""
     filename = pathlib.Path(filename)
-    if filename.suffix.lower() == '.xml' and filename.name[0] != ".":
-        return True
-    else:
-        return False
+    return filename.suffix.lower() == '.xml' and filename.name[0] != "."
 
 
-def crc16(data: bytes, crc = 0xFFFF) -> bytes:
+def crc16(data: bytes, crc: int = 0xFFFF) -> bytes:
     """Compute CRC-16 incrementally."""
     return binascii.crc_hqx(data, crc)
 
@@ -364,7 +363,7 @@ def check_file_against_schema(xmlfile: os.PathLike,
     except etree.DocumentInvalid as exc:
         _log.error(
             f"could not verify '{xmlfile}' against schema '{schemafile}'")
-        for error in  exc.error_log:
+        for error in exc.error_log:
             _log.error(f"{error.filename}:{error.line}: {error.message}")
         _log.error(f"{xmlfile} fails to validate")
 
@@ -374,6 +373,7 @@ def check_file_against_schema(xmlfile: os.PathLike,
 
 def check_manifest_file(filename: os.PathLike,
                         manifestfile: Optional[os.PathLike] = None) -> bool:
+    """Check id the manifest file is valid according to the provided schema."""
     if manifestfile is None:
         schema_root = etree.fromstring(MANIFEST_SCHEMA_STR)
     else:
@@ -383,6 +383,11 @@ def check_manifest_file(filename: os.PathLike,
 
 
 def check_product_crc(product: os.PathLike, manifestfile: os.PathLike) -> bool:
+    """Check the crc16 checksum of the manifest file.
+    
+    Check if the crc16 checksum of the manifest file is consistent with
+    the one included in the product name.
+    """
     product = pathlib.Path(product)
     manifestfile = pathlib.Path(manifestfile)
 
@@ -399,6 +404,7 @@ def check_product_crc(product: os.PathLike, manifestfile: os.PathLike) -> bool:
 
 
 def verify_safe_product(product: os.PathLike) -> int:
+    """Perform consistency checks of a SAVE products."""
     has_errors = False
     has_warnings = False
 
@@ -443,7 +449,7 @@ def verify_safe_product(product: os.PathLike) -> int:
             rep_id = elem_id
             href = metadata_object.find('metadataReference').get('href')
             reps[rep_id] = {'ID': rep_id, 'href': href}
-            filepath = product /  href
+            filepath = product / href
             if filepath in files:
                 files.remove(filepath)
 
@@ -523,7 +529,7 @@ def verify_safe_product(product: os.PathLike) -> int:
                 _log.error(f"schema file '{schema}' does not exist")
                 has_errors = True
                 # TODO: remove this temporary workaround
-                # try to see if the schema file exists in a 'support' 
+                # try to see if the schema file exists in a 'support'
                 # subdirectory
                 schema = product / "support" / data_object['rep']['href']
                 if schema.exists():
@@ -542,6 +548,8 @@ def verify_safe_product(product: os.PathLike) -> int:
             f"file '{filename}' found in product but not included "
             f"in manifest.safe")
         has_warnings = True
+
+    # TODO: add consistency checks against the product name
 
     if has_errors:
         return EX_ERROR
@@ -612,18 +620,13 @@ def get_parser(subparsers=None):
 
     return parser
 
+
 def parse_args(args=None, namespace=None, parser=None):
     """Parse command line arguments."""
     if parser is None:
         parser = get_parser()
 
     args = parser.parse_args(args, namespace)
-
-    # Common pre-processing of parsed arguments and consistency checks
-    # ...
-
-    # if getattr(args, 'func', None) is None:
-    #     parser.error('no sub-command specified.')
 
     return args
 
@@ -633,7 +636,6 @@ def main(*argv):
     # setup logging
     logging.basicConfig(format=LOGFMT, stream=sys.stdout)
     logging.captureWarnings(True)
-    log = logging.getLogger()
 
     # parse cmd line arguments
     args = parse_args(argv if argv else None)
@@ -641,7 +643,7 @@ def main(*argv):
     # execute main tasks
     exit_code = EX_OK
     try:
-        log.setLevel(args.loglevel)
+        logging.getLogger().setLevel(args.loglevel)
 
         for product in args.products:
             print(product)
@@ -652,13 +654,13 @@ def main(*argv):
             print()
 
     except Exception as exc:
-        log.critical(
+        _log.critical(
             'unexpected exception caught: {!r} {}'.format(
                 type(exc).__name__, exc))
-        log.debug('stacktrace:', exc_info=True)
+        _log.debug('stacktrace:', exc_info=True)
         exit_code = EX_FAILURE
     except KeyboardInterrupt:
-        log.warning('Keyboard interrupt received: exit the program')
+        _log.warning('Keyboard interrupt received: exit the program')
         exit_code = EX_INTERRUPT
 
     return exit_code
