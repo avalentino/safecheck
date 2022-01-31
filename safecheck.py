@@ -33,9 +33,11 @@ from lxml import etree
 __version__ = '3.0'
 _log = logging.getLogger(__name__)
 
+
 NSXFDU = "{urn:ccsds:schema:xfdu:1}"
 
-manifest_schema = """\
+
+MANIFEST_SCHEMA_STR = """\
 <?xml version="1.0"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xfdu="urn:ccsds:schema:xfdu:1" targetNamespace="urn:ccsds:schema:xfdu:1" elementFormDefault="unqualified" attributeFormDefault="unqualified">
   <xs:simpleType name="locatorTypeType">
@@ -367,7 +369,7 @@ def check_file_against_schema(xmlfile: os.PathLike,
 def check_manifest_file(filename: os.PathLike,
                         manifestfile: Optional[os.PathLike] = None) -> bool:
     if manifestfile is None:
-        schema_root = etree.fromstring(manifest_schema)
+        schema_root = etree.fromstring(MANIFEST_SCHEMA_STR)
     else:
         schema_root = etree.parse(manifestfile).getroot()
     schema = etree.XMLSchema(schema_root)
