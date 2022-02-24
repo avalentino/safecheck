@@ -458,16 +458,18 @@ def verify_safe_product(product: os.PathLike,
         data_object = content_unit.find('dataObjectPointer')
         data_object_id = data_object.get('dataObjectID')
         rep_id = content_unit.get('repID')
-        # rep_id can be a space separated list of IDs
-        # (first one contains the main schema)
-        rep_id = rep_id.split()[0]
-        if rep_id not in reps:
-            _log.error(
-                f"dataObject '{data_object_id}' in informationPackageMap "
-                f"contains repID '{rep_id}' which is not defined in "
-                f"metadataSection")
-            return EX_ERROR
-        data_objects[data_object_id] = {'rep': reps[rep_id]}
+        # rep_id is optional (S1-RS-MDA-52-7443 Issue 3.5 10/12/2020)
+        if rep_id is not None:
+            # rep_id can be a space separated list of IDs
+            # (first one contains the main schema)
+            rep_id = rep_id.split()[0]
+            if rep_id not in reps:
+                _log.error(
+                    f"dataObject '{data_object_id}' in informationPackageMap "
+                    f"contains repID '{rep_id}' which is not defined in "
+                    f"metadataSection")
+                return EX_ERROR
+            data_objects[data_object_id] = {'rep': reps[rep_id]}
 
     data_object_section = manifest_xmldoc.find('dataObjectSection')
     for data_object in data_object_section.findall('dataObject'):
