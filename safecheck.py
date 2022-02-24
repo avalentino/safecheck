@@ -372,13 +372,11 @@ def check_file_against_schema(xmlfile: os.PathLike,
 
 
 def check_manifest_file(filename: os.PathLike,
-                        manifestfile: Optional[os.PathLike] = None) -> bool:
+                        schema: Optional[os.PathLike] = None) -> bool:
     """Check id the manifest file is valid according to the provided schema."""
-    if manifestfile is None:
-        schema_root = etree.fromstring(MANIFEST_SCHEMA_STR)
-    else:
-        schema_root = etree.parse(manifestfile).getroot()
-    schema = etree.XMLSchema(schema_root)
+    if schema is None:
+        schemadoc = etree.fromstring(MANIFEST_SCHEMA_STR)
+        schema = etree.XMLSchema(schemadoc)
     return check_file_against_schema(filename, schema)
 
 
