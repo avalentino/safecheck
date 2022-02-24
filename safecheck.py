@@ -401,7 +401,8 @@ def check_product_crc(product: os.PathLike, manifestfile: os.PathLike) -> bool:
     return True
 
 
-def verify_safe_product(product: os.PathLike) -> int:
+def verify_safe_product(product: os.PathLike,
+                        schema: Optional[os.PathLike] = None) -> int:
     """Perform consistency checks of a SAVE products."""
     has_errors = False
     has_warnings = False
@@ -421,7 +422,7 @@ def verify_safe_product(product: os.PathLike) -> int:
         if not check_product_crc(product, manifestfile):
             has_warnings = True
 
-    if not check_manifest_file(manifestfile):
+    if not check_manifest_file(manifestfile, schema):
         has_errors = True
     manifest_xmldoc = etree.parse(os.fspath(manifestfile))
     if manifest_xmldoc is None:
@@ -608,7 +609,9 @@ def get_parser(subparsers=None):
     parser = _set_logging_control_args(parser)
 
     # Command line options
-    # ...
+    parser.add_argument(
+      '-s', '--schema',
+      help='path to the XML schema file for the product manifest')
 
     # Positional arguments
     parser.add_argument('products', nargs="+", metavar="SAFE-PRODUCT")
@@ -645,7 +648,7 @@ def main(*argv):
 
         for product in args.products:
             print(product)
-            result = verify_safe_product(product)
+            result = verify_safe_product(product, args.schema)
             if result != 0:
                 if result < exit_code or exit_code == EX_OK:
                     exit_code = result
