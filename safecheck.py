@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # PYTHON_ARGCOMPLETE_OK
 # Copyright (C) 2011-2012 S[&]T, The Netherlands.
-# Copyright (C) 2022 Antonio Valentino.
 
 """Perform constency checks on SAFE products.
 
@@ -366,6 +365,7 @@ def check_file_against_schema(xmlfile: os.PathLike,
         for error in exc.error_log:
             _log.error(f"{error.filename}:{error.line}: {error.message}")
         _log.error(f"{xmlfile} fails to validate")
+        return False
 
     _log.info(f"file '{xmlfile}' valid according to schema '{schemafile}'")
     return True
