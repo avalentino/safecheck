@@ -2,7 +2,7 @@
 # PYTHON_ARGCOMPLETE_OK
 # Copyright (C) 2011-2012 S[&]T, The Netherlands.
 
-"""Perform constency checks on SAFE products.
+"""Perform consistency checks on SAFE products.
 
 Check the contents of the SAFE products against information included in
 the manifest file, and also perform checks on the components size and
@@ -12,7 +12,7 @@ All XML files included in the product are checked against their schema
 (if available).
 
 Additional checks on consistency between the product name and information
-included in the mnifest file are also performed.
+included in the manifest file are also performed.
 """
 
 import io
