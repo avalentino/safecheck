@@ -29,8 +29,11 @@ from typing import IO, Iterator, Optional, Union
 from lxml import etree
 
 
+logger = logging.getLogger(__name__)
+
+
+__copyright__ = 'Copyright (C) 2011-2023 S[&]T, The Netherlands.'
 __version__ = '3.0'
-_log = logging.getLogger(__name__)
 
 
 EX_OK = getattr(os, "EX_OK", 0)
@@ -360,14 +363,14 @@ def check_file_against_schema(xmlfile: os.PathLike,
     try:
         schema.assertValid(xmldoc)
     except etree.DocumentInvalid as exc:
-        _log.error(
+        logger.error(
             f"could not verify '{xmlfile}' against schema '{schemafile}'")
         for error in exc.error_log:
-            _log.error(f"{error.filename}:{error.line}: {error.message}")
-        _log.error(f"{xmlfile} fails to validate")
+            logger.error(f"{error.filename}:{error.line}: {error.message}")
+        logger.error(f"{xmlfile} fails to validate")
         return False
 
-    _log.info(f"file '{xmlfile}' valid according to schema '{schemafile}'")
+    logger.info(f"file '{xmlfile}' valid according to schema '{schemafile}'")
     return True
 
 
@@ -393,7 +396,7 @@ def check_product_crc(product: os.PathLike, manifestfile: os.PathLike) -> bool:
     expected_crc = format(expected_crc, '04X')
     actual_crc = product.stem[-4:]
     if expected_crc != actual_crc:
-        _log.warning(
+        logger.warning(
             f"crc in product name '{actual_crc}' does not match crc "
             f"of manifest file '{expected_crc}'"
         )
@@ -408,14 +411,14 @@ def verify_safe_product(product: os.PathLike,
     has_warnings = False
 
     if not pathlib.Path(product).exists():
-        _log.error(f"could not find '{product}'")
+        logger.error(f"could not find '{product}'")
         return EX_ERROR
 
     product = pathlib.Path(product).resolve()
 
     manifestfile = product / "manifest.safe"
     if not manifestfile.exists():
-        _log.error(f"could not find '{manifestfile}'")
+        logger.error(f"could not find '{manifestfile}'")
         return EX_ERROR
 
     if product.name[4:7] != "AUX":
@@ -426,13 +429,13 @@ def verify_safe_product(product: os.PathLike,
         has_errors = True
     manifest_xmldoc = etree.parse(os.fspath(manifestfile))
     if manifest_xmldoc is None:
-        _log.error(f"could not parse xml file '{manifestfile}'")
+        logger.error(f"could not parse xml file '{manifestfile}'")
         return EX_ERROR
 
     # find list of files in product
     files = {item for item in product.rglob("*") if item.is_file()}
     if manifestfile not in files:
-        _log.error(
+        logger.error(
             "could not find 'manifest.safe' in directory listing of product")
         return EX_ERROR
     files.remove(manifestfile)
@@ -464,7 +467,7 @@ def verify_safe_product(product: os.PathLike,
             # (first one contains the main schema)
             rep_id = rep_id.split()[0]
             if rep_id not in reps:
-                _log.error(
+                logger.error(
                     f"dataObject '{data_object_id}' in informationPackageMap "
                     f"contains repID '{rep_id}' which is not defined in "
                     f"metadataSection")
@@ -475,7 +478,7 @@ def verify_safe_product(product: os.PathLike,
     for data_object in data_object_section.findall('dataObject'):
         data_object_id = data_object.get('ID')
         if data_object_id not in data_objects:
-            _log.error(
+            logger.error(
                 f"dataObject '{data_object_id}' in dataObjectSection is "
                 f"not defined in informationPackageMap")
             return EX_ERROR
@@ -484,7 +487,7 @@ def verify_safe_product(product: os.PathLike,
         # (first one contains the main schema)
         rep_id = rep_id.split()[0]
         if data_objects[data_object_id]['rep']['ID'] != rep_id:
-            _log.error(
+            logger.error(
                 f"dataObject '{data_object_id}' contains repID "
                 f"'{data_objects[data_object_id]['rep']['ID']}' in "
                 f"informationPackageMap, but '{rep_id}' in dataObjectSection")
@@ -506,20 +509,20 @@ def verify_safe_product(product: os.PathLike,
         filepath = product / data_object['href']
         # check existence of file
         if not filepath.exists():
-            _log.error(f"manifest.safe reference '{filepath}' does not exist")
+            logger.error(f"manifest.safe reference '{filepath}' does not exist")
             has_errors = True
             continue
         # check file size
         filesize = filepath.stat().st_size
         if filesize != int(data_object['size']):
-            _log.error(
+            logger.error(
                 f"file size for '{filepath}' ({filesize}) does not match "
                 f"file size in manifest.safe ({data_object['size']})")
             has_errors = True
         # check md5sum
         checksum = get_md5sum(filepath)
         if checksum != data_object['checksum']:
-            _log.error(
+            logger.error(
                 f"checksum for '{filepath}' ({checksum}) does not match "
                 f"checksum in manifest.safe ({data_object['checksum']})")
             has_errors = True
@@ -527,14 +530,14 @@ def verify_safe_product(product: os.PathLike,
         if is_xml(filepath) and data_object['rep']:
             schema = product / data_object['rep']['href']
             if not schema.exists():
-                _log.error(f"schema file '{schema}' does not exist")
+                logger.error(f"schema file '{schema}' does not exist")
                 has_errors = True
                 # TODO: remove this temporary workaround
                 # try to see if the schema file exists in a 'support'
                 # subdirectory
                 schema = product / "support" / data_object['rep']['href']
                 if schema.exists():
-                    _log.warning(
+                    logger.warning(
                         "found schema in 'support' subdirectory - "
                         "will use that for verification")
                     if not check_file_against_schema(filepath, schema):
@@ -545,7 +548,7 @@ def verify_safe_product(product: os.PathLike,
     # Report on files in the SAFE package that are not referenced by the
     # manifset.safe file
     for filename in sorted(files):
-        _log.warning(
+        logger.warning(
             f"file '{filename}' found in product but not included "
             f"in manifest.safe")
         has_warnings = True
@@ -657,13 +660,13 @@ def main(*argv):
             print()
 
     except Exception as exc:
-        _log.critical(
+        logger.critical(
             'unexpected exception caught: {!r} {}'.format(
                 type(exc).__name__, exc))
-        _log.debug('stacktrace:', exc_info=True)
+        logger.debug('stacktrace:', exc_info=True)
         exit_code = EX_FAILURE
     except KeyboardInterrupt:
-        _log.warning('Keyboard interrupt received: exit the program')
+        logger.warning('Keyboard interrupt received: exit the program')
         exit_code = EX_INTERRUPT
 
     return exit_code
